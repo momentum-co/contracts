@@ -9,12 +9,14 @@ contract MomentumChain is Ownable {
 
   //地址的發起過的挑戰id
   mapping (address => uint[]) public addressToChallengeIds;
+  //K:這邊是不是也可以透過event來獲得，不用特別存state variable
   
   //挑戰id對應的挑戰內容
   mapping (uint => Challenge) public idToChallenge;
 
   //記錄所有挑戰id，array數量當作id使用
   uint[] public challengeIds;
+  //K:這邊是不是不用特別存成array? 應該就只需要用一個uint不斷地做++即可
 
   enum ChallengeState{ UNINITIATED, PROGRESSING, SUCCEEDED, FAILED, GIVEUP }
 
@@ -85,6 +87,7 @@ contract MomentumChain is Ownable {
   function uploadProgress(uint _challengeId, string memory _note) public onlyChallengeOwner(_challengeId) {
     Challenge storage challenge = idToChallenge[_challengeId];
     require(challenge.state == ChallengeState.PROGRESSING, ""); //需要挑戰進行中才可上傳
+    //K:如果超過了至少挑戰天數 應該也還是可以繼續上傳吧？
     require(challenge.records.length < challenge.challengeDays, ""); //記錄小於總天數才可上傳
     Record storage lastRecord = challenge.records[challenge.records.length - 1];
     require(block.timestamp - lastRecord.timestamp >= 10 hours, ""); //超過冷卻時間10小時後才可上傳
