@@ -84,17 +84,16 @@ contract MomentumChain is Ownable {
     }
   }
 
+  //已達成最低次數即可贖回
   function finishAndWithdrawl(uint _challengeId) public onlyChallengeOwner(_challengeId) {
     Challenge storage challenge = idToChallenge[_challengeId];
     require(challenge.state == uint8(ChallengeState.SUCCEEDED), "");
-    uint finishAt = challenge.createdAt + challenge.totalDays * 1 days;
-    require(block.timestamp >= finishAt, ""); //已超過總天數才能領
     transferTo(msg.sender, _challengeId, challenge.betAmount);
   }
 
   function forceEndChallenge(uint _challengeId) public onlyChallengeOwner(_challengeId) {
     Challenge storage challenge = idToChallenge[_challengeId];
-    require(challenge.state == uint8(ChallengeState.PROGRESSING), "");//TBD:已達最低天數後還可強制終止嗎？
+    require(challenge.state == uint8(ChallengeState.PROGRESSING), "");
     uint96 returnAmount = challenge.betAmount * 9 / 10; //退九成
     transferTo(msg.sender, _challengeId, returnAmount);
     challenge.betAmount -= returnAmount; //修改該挑戰剩餘的金額，到時官方回收
@@ -112,7 +111,7 @@ contract MomentumChain is Ownable {
         transferTo(msg.sender, _challengeId, challenge.betAmount);
         
       //成功後一段時間沒有拿走，退九成拿一成
-      } else if (challenge.state == uint8(ChallengeState.SUCCEEDED) && block.timestamp >= finishAt + 7 days) {
+      } else if (challenge.state == uint8(ChallengeState.SUCCEEDED) && block.timestamp >= finishAt + 30 days) {
         transferTo(msg.sender, _challengeId, challenge.betAmount * 1 / 10);
         transferTo(challenge.owner, _challengeId, challenge.betAmount * 9 / 10);
       }
