@@ -3,8 +3,9 @@ pragma solidity ^0.8.13;
 
 import "openzeppelin-contracts/access/Ownable.sol";
 import "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/token/ERC721/ERC721.sol";
 
-contract MomentumChain is Ownable {
+contract MomentumChain is Ownable, ERC721 {
   //挑戰id對應的挑戰內容
   mapping (uint => Challenge) public idToChallenge;
   
@@ -20,7 +21,7 @@ contract MomentumChain is Ownable {
     uint32 minDays;
     uint64 createdAt;
     uint96 betAmount;
-    address owner;
+    // address owner;
     address token;
     string name;
     string description;
@@ -35,9 +36,11 @@ contract MomentumChain is Ownable {
   
   //檢查是否是挑戰發起者
   modifier onlyChallengeOwner(uint _challengeId) {
-    require(msg.sender == idToChallenge[_challengeId].owner, "not owner of this challenge");
+    require(msg.sender == ownerOf(_challengeId), "not owner of this challenge");
     _;
   }
+
+  constructor() ERC721("Momentum Challenge", "Momentum") {}
 
   //挑戰者創建挑戰項目
   function createChallenge (
@@ -58,10 +61,13 @@ contract MomentumChain is Ownable {
       challenge.minDays = uint32(_minDays);
       challenge.createdAt = uint64(block.timestamp);
       challenge.betAmount = uint96(_betAmount);
-      challenge.owner = msg.sender;
+      // challenge.owner = msg.sender;
       challenge.token = _token;
       challenge.name = _name;
       challenge.description = _description;
+
+      // create NFT for msg.sender as proof of ownership
+      _mint(msg.sender, id);
       
       //創建項目時另外打錢進來
       IERC20(_token).transferFrom(msg.sender, address(this), _betAmount);
@@ -113,7 +119,7 @@ contract MomentumChain is Ownable {
       //成功後一段時間沒有拿走，退九成拿一成
       } else if (challenge.state == uint8(ChallengeState.SUCCEEDED) && block.timestamp >= finishAt + 30 days) {
         transferTo(msg.sender, _challengeId, challenge.betAmount * 1 / 10);
-        transferTo(challenge.owner, _challengeId, challenge.betAmount * 9 / 10);
+        transferTo(ownerOf(_challengeId), _challengeId, challenge.betAmount * 9 / 10);
       }
     }
     revert("");
