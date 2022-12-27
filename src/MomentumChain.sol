@@ -21,7 +21,6 @@ contract MomentumChain is Ownable, ERC721 {
     uint32 minDays;
     uint64 createdAt;
     uint96 betAmount;
-    // address owner;
     address token;
     string name;
     string description;
@@ -61,7 +60,6 @@ contract MomentumChain is Ownable, ERC721 {
       challenge.minDays = uint32(_minDays);
       challenge.createdAt = uint64(block.timestamp);
       challenge.betAmount = uint96(_betAmount);
-      // challenge.owner = msg.sender;
       challenge.token = _token;
       challenge.name = _name;
       challenge.description = _description;
