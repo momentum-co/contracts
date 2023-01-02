@@ -19,7 +19,7 @@ contract MomentumChallenge is Ownable, ERC721 {
     uint8 state;
     uint32 totalDays;
     uint32 minDays;
-    uint64 createdAt;
+    uint64 finishedAt;
     uint96 betAmount;
     address token;
     string name;
@@ -67,7 +67,7 @@ contract MomentumChallenge is Ownable, ERC721 {
       challenge.state = uint8(ChallengeState.PROGRESSING);
       challenge.totalDays = uint32(_totalDays);
       challenge.minDays = uint32(_minDays);
-      challenge.createdAt = uint64(block.timestamp);
+      challenge.finishedAt = uint64(block.timestamp + _totalDays * 1 days);
       challenge.betAmount = uint96(_betAmount);
       challenge.token = _token;
       challenge.name = _name;
@@ -89,8 +89,7 @@ contract MomentumChallenge is Ownable, ERC721 {
     Challenge storage challenge = idToChallenge[_challengeId];
     require(challenge.state == uint8(ChallengeState.PROGRESSING) || challenge.state == uint8(ChallengeState.SUCCEEDED), "");
     require(challenge.records.length < challenge.totalDays, ""); //記錄小於總天數才可上傳
-    uint finishAt = challenge.createdAt + challenge.totalDays * 1 days;
-    require(block.timestamp <= finishAt, ""); //超過總天數後不可上傳
+    require(block.timestamp <= challenge.finishedAt, ""); //超過總天數後不可上傳
 
 
     Record storage lastRecord = challenge.records[challenge.records.length - 1];
@@ -113,7 +112,11 @@ contract MomentumChallenge is Ownable, ERC721 {
    */
   function giveup(uint _challengeId) external onlyChallengeOwner(_challengeId) {
     Challenge storage challenge = idToChallenge[_challengeId];
-    require(challenge.state == uint8(ChallengeState.PROGRESSING), "");    
+    require(challenge.state == uint8(ChallengeState.PROGRESSING), ""); 
+
+    // too late to give up!
+    require(block.timestamp <= challenge.finishedAt, "");
+
     challenge.state = uint8(ChallengeState.GIVEUP);
 
     uint96 total = challenge.betAmount;
@@ -134,9 +137,8 @@ contract MomentumChallenge is Ownable, ERC721 {
     Challenge storage challenge = idToChallenge[_challengeId];
     require(challenge.state == uint8(ChallengeState.PROGRESSING), "");
 
-    uint finishAt = challenge.createdAt + challenge.totalDays * 1 days;
     // 進行中狀態但已超過天數，挑戰失敗
-    if (block.timestamp >= finishAt) {
+    if (block.timestamp >= challenge.finishedAt) {
       challenge.state = uint8(ChallengeState.FAILED);
       IERC20(challenge.token).safeTransfer(msg.sender, challenge.betAmount);
     }
