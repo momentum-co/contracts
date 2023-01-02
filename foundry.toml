@@ -1,2 +1,12 @@
+[profile.default]
+solc_version = '0.8.17'
+optimizer = true
+optimizer_runs = 100000
+
 [profile.ci.fuzz]
 runs = 10_000
+
+[fmt]
+line_length=130
+tab_width=4
+func_attrs_with_params_multiline=true

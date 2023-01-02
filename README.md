@@ -9,3 +9,9 @@ forge init
 forge build
 forge test
 ```
+
+### enable husky in local
+
+```
+npx husky install
+```
