@@ -78,51 +78,47 @@ contract MomentumChallenge is Ownable, ERC721 {
     Challenge storage challenge = idToChallenge[_challengeId];
     require(challenge.state != uint8(ChallengeState.FAILED) && challenge.state != uint8(ChallengeState.GIVEUP), "");
     require(challenge.records.length < challenge.totalDays, ""); //記錄小於總天數才可上傳
-    Record storage lastRecord = challenge.records[challenge.records.length - 1];
-    require(block.timestamp - lastRecord.timestamp >= 10 hours, ""); //超過冷卻時間10小時後才可上傳
     uint finishAt = challenge.createdAt + challenge.totalDays * 1 days;
     require(block.timestamp <= finishAt, ""); //超過總天數後不可上傳
 
+
+    Record storage lastRecord = challenge.records[challenge.records.length - 1];
+    require(block.timestamp - lastRecord.timestamp >= 10 hours, ""); //超過冷卻時間10小時後才可上傳
+    
     challenge.records.push(Record(block.timestamp, _note));
     
     //超過最低天數，標記狀態為已成功
     if (challenge.records.length >= challenge.minDays) {
       challenge.state = uint8(ChallengeState.SUCCEEDED);
+      // Send back the money after you finish the challenge!
+      IERC20(challenge.token).safeTransfer(msg.sender, challenge.betAmount);
     }
   }
 
-  //已達成最低次數即可贖回
-  function finishAndWithdrawl(uint _challengeId) external onlyChallengeOwner(_challengeId) {
+  ///@dev give up a challenge and get back 90% of deposit
+  function giveup(uint _challengeId) external onlyChallengeOwner(_challengeId) {
     Challenge storage challenge = idToChallenge[_challengeId];
-    require(challenge.state == uint8(ChallengeState.SUCCEEDED), "");
-    IERC20(challenge.token).safeTransfer(msg.sender, challenge.betAmount);
-  }
-
-  function forceEndChallenge(uint _challengeId) external onlyChallengeOwner(_challengeId) {
-    Challenge storage challenge = idToChallenge[_challengeId];
-    require(challenge.state == uint8(ChallengeState.PROGRESSING), "");
-    uint96 returnAmount = challenge.betAmount * 9 / 10; //退九成
-    IERC20(challenge.token).safeTransfer(msg.sender, returnAmount);
-    challenge.betAmount -= returnAmount; //修改該挑戰剩餘的金額，到時官方回收
+    require(challenge.state == uint8(ChallengeState.PROGRESSING), "");    
     challenge.state = uint8(ChallengeState.GIVEUP);
+
+    uint96 total = challenge.betAmount;
+
+    // 90% go back to the challenger
+    uint96 returnAmount = total * 9 / 10; //退九成
+    IERC20(challenge.token).safeTransfer(msg.sender, returnAmount);
+    // 10% go to the contract owner
+    IERC20(challenge.token).safeTransfer(owner(), total - returnAmount);
   }
 
   function confiscate(uint _challengeId) external onlyOwner() {
     Challenge storage challenge = idToChallenge[_challengeId];
-    IERC20 token = IERC20(challenge.token); // cache token
-    if (challenge.state == uint8(ChallengeState.FAILED) || challenge.state == uint8(ChallengeState.GIVEUP)) {
-      token.safeTransfer(msg.sender, challenge.betAmount);
-    } else {
-      uint finishAt = challenge.createdAt + challenge.totalDays * 1 days;
-      //進行中狀態但已超過天數
-      if (challenge.state == uint8(ChallengeState.PROGRESSING) && block.timestamp >= finishAt) {
-        token.safeTransfer(msg.sender, challenge.betAmount);
-        
-      //成功後一段時間沒有拿走，退九成拿一成
-      } else if (challenge.state == uint8(ChallengeState.SUCCEEDED) && block.timestamp >= finishAt + 30 days) {
-        token.safeTransfer(msg.sender, challenge.betAmount * 1 / 10);
-        token.safeTransfer(ownerOf(_challengeId), challenge.betAmount * 9 / 10);
-      }
+    require(challenge.state == uint8(ChallengeState.PROGRESSING), "");
+
+    uint finishAt = challenge.createdAt + challenge.totalDays * 1 days;
+    // 進行中狀態但已超過天數，挑戰失敗
+    if (block.timestamp >= finishAt) {
+      challenge.state = uint8(ChallengeState.FAILED);
+      IERC20(challenge.token).safeTransfer(msg.sender, challenge.betAmount);
     }
   }
 
