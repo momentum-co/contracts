@@ -2,7 +2,7 @@
 
 **Template repository for getting started quickly with Foundry projects**
 
-![Github Actions](https://github.com/foundry-rs/forge-template/workflows/CI/badge.svg)
+![Github Actions](https://github.com/momentum-co/contracts/workflows/CI/badge.svg)
 
 ## Getting Started
 
