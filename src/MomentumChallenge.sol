@@ -12,7 +12,15 @@ import "openzeppelin-contracts/token/ERC721/ERC721.sol";
 contract MomentumChallenge is Ownable, ERC721 {
   using SafeERC20 for IERC20;
 
+  /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+  /*                         CONSTANTS                          */
+  /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
   enum ChallengeState{ UNINITIATED, PROGRESSING, SUCCEEDED, FAILED, GIVEUP }
+
+  /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+  /*                          Structs                           */
+  /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
   ///@dev 挑戰項目的內容
   struct Challenge {
@@ -33,17 +41,54 @@ contract MomentumChallenge is Ownable, ERC721 {
     string note;
   }
 
+  /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+  /*                      State Variables                       */
+  /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
   ///@dev mapping from challenge ID to detail
   mapping (uint => Challenge) public idToChallenge;
   
   ///@dev id that will be assigned to the next challenge
   uint public nextId;
+
+  /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+  /*                        CUSTOM ERRORS                       */
+  /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+  ///@dev challenge not in progress, cannot upload progress
+  error ChallengeEnded();
+
+  ///@dev challenge not in progress, cannot giveup
+  error NotInProgress();
+
+  ///@dev challenge has reached the max amount of uploads
+  error ChallengeFinished();
+
+  ///@dev cannot upload twice within 10 hours
+  error UploadInCoolDown();
+
+  ///@dev challenge has pass the expiration
+  error ChallengeExpired();
+
+  ///@dev caller is not the challenge caller
+  error NotChallengeOwner();
+
+  /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+  /*                         Events                             */
+  /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+
+  /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+  /*                        Modifiers                           */
+  /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
   
   //檢查是否是挑戰發起者
   modifier onlyChallengeOwner(uint _challengeId) {
     require(msg.sender == ownerOf(_challengeId), "not owner of this challenge");
     _;
   }
+
+  
 
   constructor() ERC721("Momentum Challenge", "Momentum") {}
 
@@ -87,17 +132,22 @@ contract MomentumChallenge is Ownable, ERC721 {
    */
   function uploadProgress(uint _challengeId, string memory _note) external onlyChallengeOwner(_challengeId) {
     Challenge storage challenge = idToChallenge[_challengeId];
-    require(challenge.state == uint8(ChallengeState.PROGRESSING) || challenge.state == uint8(ChallengeState.SUCCEEDED), "");
-    require(challenge.records.length < challenge.totalDays, ""); //記錄小於總天數才可上傳
-    require(block.timestamp <= challenge.finishedAt, ""); //超過總天數後不可上傳
 
+    // cannot upload if challenge is already marked as failed or given up
+    if(challenge.state != uint8(ChallengeState.PROGRESSING) && 
+      challenge.state != uint8(ChallengeState.SUCCEEDED)) revert ChallengeEnded();
+    
+    //記錄小於總天數才可上傳
+    if(challenge.records.length >= challenge.totalDays) revert ChallengeFinished(); 
+    
+    if(block.timestamp > challenge.finishedAt) revert ChallengeExpired();
 
     Record storage lastRecord = challenge.records[challenge.records.length - 1];
-    require(block.timestamp - lastRecord.timestamp >= 10 hours, ""); //超過冷卻時間10小時後才可上傳
+    if(block.timestamp - lastRecord.timestamp < 10 hours) revert UploadInCoolDown(); //超過冷卻時間10小時後才可上傳
     
     challenge.records.push(Record(block.timestamp, _note));
     
-    //達最低天數，標記狀態為已成功並退款。之後再上傳不會再觸發 == 
+    //達最低天數，標記狀態為已成功並退款。之後再上傳不會再觸發 
     if (challenge.records.length == challenge.minDays) {
       challenge.state = uint8(ChallengeState.SUCCEEDED);
       // Send back the money after you finish the challenge!
@@ -112,10 +162,10 @@ contract MomentumChallenge is Ownable, ERC721 {
    */
   function giveup(uint _challengeId) external onlyChallengeOwner(_challengeId) {
     Challenge storage challenge = idToChallenge[_challengeId];
-    require(challenge.state == uint8(ChallengeState.PROGRESSING), ""); 
+    if(challenge.state != uint8(ChallengeState.PROGRESSING)) revert NotInProgress(); 
 
     // too late to give up!
-    require(block.timestamp <= challenge.finishedAt, "");
+    if(block.timestamp > challenge.finishedAt) revert ChallengeExpired();
 
     challenge.state = uint8(ChallengeState.GIVEUP);
 
@@ -135,7 +185,7 @@ contract MomentumChallenge is Ownable, ERC721 {
    */
   function confiscate(uint _challengeId) external onlyOwner {
     Challenge storage challenge = idToChallenge[_challengeId];
-    require(challenge.state == uint8(ChallengeState.PROGRESSING), "");
+    if(challenge.state != uint8(ChallengeState.PROGRESSING)) revert NotInProgress();
 
     // 進行中狀態但已超過天數，挑戰失敗
     if (block.timestamp >= challenge.finishedAt) {
@@ -145,4 +195,3 @@ contract MomentumChallenge is Ownable, ERC721 {
   }
 
 }
-
