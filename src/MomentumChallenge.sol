@@ -67,8 +67,11 @@ contract MomentumChallenge is Ownable, ERC721 {
   ///@dev cannot upload twice within 10 hours
   error UploadInCoolDown();
 
-  ///@dev challenge has pass the expiration
+  ///@dev challenge has passed the expiration
   error ChallengeExpired();
+
+  ///@dev challenge has not passed the expiration
+  error ChallengeNotExpired();
 
   ///@dev caller is not the challenge caller
   error NotChallengeOwner();
@@ -179,7 +182,7 @@ contract MomentumChallenge is Ownable, ERC721 {
   }
 
   /**
-   * @notice collect token from failed challenge
+   * @notice collect token from a failed challenge
    * @dev can only be called by contract owner
    * @param _challengeId id of the challenge
    */
@@ -187,11 +190,12 @@ contract MomentumChallenge is Ownable, ERC721 {
     Challenge storage challenge = idToChallenge[_challengeId];
     if(challenge.state != uint8(ChallengeState.PROGRESSING)) revert NotInProgress();
 
+    // the challenge is still in progress.
+    if (block.timestamp < challenge.finishedAt) revert ChallengeNotExpired();
+
     // 進行中狀態但已超過天數，挑戰失敗
-    if (block.timestamp >= challenge.finishedAt) {
-      challenge.state = uint8(ChallengeState.FAILED);
-      IERC20(challenge.token).safeTransfer(msg.sender, challenge.betAmount);
-    }
+    challenge.state = uint8(ChallengeState.FAILED);
+    IERC20(challenge.token).safeTransfer(msg.sender, challenge.betAmount);
   }
 
 }
