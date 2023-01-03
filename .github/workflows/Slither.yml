@@ -7,7 +7,7 @@ on:
     branches: [master]
 
 jobs:
-  analyze-core:
+  static-analysis:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -20,14 +20,14 @@ jobs:
       - name: Install dependencies
         run: forge install
 
-      - name: Run Slither core
+      - name: Run Slither
         uses: crytic/slither-action@main
         continue-on-error: true
         id: slither
         with:
-          target: "src/core"
+          target: "src"
           slither-config: "slither.config.json"
-          solc-version: 0.8.13
+          solc-version: 0.8.17
           sarif: results.sarif
 
       # - name: Upload SARIF file for core
